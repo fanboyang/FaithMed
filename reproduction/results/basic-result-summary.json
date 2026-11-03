@@ -1,0 +1,95 @@
+{
+  "scope": "integration_smoke_not_benchmark",
+  "code_commit": "0426d1b",
+  "student": "Qwen3-1.7B",
+  "judge": "gpt-6-luna",
+  "gpu": 4,
+  "training_questions": 8,
+  "rollouts_per_question": 8,
+  "max_turns": 4,
+  "training_iterations": 1,
+  "actual_optimizer_steps": 3,
+  "optimizer_lr": 1e-06,
+  "logged_mean_grad_norm": 1.66,
+  "rollout_tool_call_count": 0,
+  "retrieval_independent_test": "6 real documents returned from fixed five-source 40-document CPU MiniCPM exact-search subset",
+  "full_paper_retrieval_ready": false,
+  "full_benchmark_run": false,
+  "judge_request_status_counts": {
+    "ok": 63
+  },
+  "judge_http_attempts": 63,
+  "runtime": {
+    "scope": "integration_smoke_not_benchmark",
+    "run_name": "faithmed-integration-smoke-v2",
+    "owner": "faithmed-integration-smoke-v2:325e1916-aaed-4c10-8e2d-471c515fa68a",
+    "returncode": 0,
+    "elapsed_seconds": 273.802255153656,
+    "budget_seconds": 1800,
+    "cleaned_tagged_pids": [],
+    "cleanup_error": null
+  },
+  "parameter_update": {
+    "scope": "integration_smoke_not_benchmark",
+    "training_iterations": 1,
+    "optimizer_step_min": 3.0,
+    "optimizer_step_max": 3.0,
+    "checked_parameter_slices": [
+      {
+        "parameter": "model.layers.0.self_attn.q_proj.weight",
+        "finite": true,
+        "changed_elements": 256,
+        "max_abs_delta": 2.995133399963379e-06
+      },
+      {
+        "parameter": "model.layers.0.mlp.down_proj.weight",
+        "finite": true,
+        "changed_elements": 256,
+        "max_abs_delta": 2.998858690261841e-06
+      },
+      {
+        "parameter": "model.norm.weight",
+        "finite": true,
+        "changed_elements": 62,
+        "max_abs_delta": 2.86102294921875e-06
+      }
+    ]
+  },
+  "checkpoint_restore": {
+    "status": "passed",
+    "scope": "CPU strict checkpoint structure and finite forward only",
+    "checkpoint": "/data/fby/faithmed/outputs/faithmed-integration-smoke-v2/checkpoints/faithmed-integration-smoke-v2/global_step_1/actor/model_world_size_1_rank_0.pt",
+    "original_config_tokenizer": "/data/fby/faithmed/models/Qwen3-1.7B",
+    "cuda_visible_devices": "",
+    "device": "cpu",
+    "model_class": "Qwen3ForCausalLM",
+    "dtype": "torch.float32",
+    "num_threads": 8,
+    "num_interop_threads": 1,
+    "strict_load": true,
+    "missing_keys": 0,
+    "unexpected_keys": 0,
+    "input_tokens": [
+      [
+        32,
+        2805,
+        29295,
+        13351,
+        1273,
+        13
+      ]
+    ],
+    "input_shape": [
+      1,
+      6
+    ],
+    "logits_shape": [
+      1,
+      6,
+      151936
+    ],
+    "logits_finite": true,
+    "elapsed_seconds": 27.09
+  },
+  "prior_failure": "v1 ended before optimizer due exact escape wrapper JSON parsing; original audit retained, 62 responses recovered offline in separate copy; 1 pending remains unknown"
+}
