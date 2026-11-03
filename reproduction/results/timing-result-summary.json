@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "run_name": "faithmed-timing-v1",
+  "scope": "timing_pilot_single_gpu_40_docs_not_paper_result",
+  "status": "completed",
+  "observed_utc": "2026-11-03T13:12:24.030084+00:00",
+  "configuration": {
+    "scope": "timing_pilot_40_docs_not_paper_result",
+    "train_rows": 33906,
+    "train_path": "/data/fby/faithmed/data/medmix_rl/train.parquet",
+    "steps": 5,
+    "batch_size": 32,
+    "rollouts_per_prompt": 8,
+    "ppo_mini_batch_size": 128,
+    "student": "original Qwen3-1.7B (no resume)",
+    "retrieval": {
+      "status": "ready",
+      "scope": "integration_smoke_subset_exact_search",
+      "documents": 40,
+      "sources": [
+        "guidelines",
+        "pubmed",
+        "statpearls",
+        "textbooks",
+        "wikipedia"
+      ],
+      "dimension": 1024
+    },
+    "retrieval_url": "http://127.0.0.1:18601",
+    "validation_enabled": false,
+    "tensor_parallel_size": 1,
+    "sequence_parallel_size": 1,
+    "logprob_micro_batch_size": 1,
+    "max_prompt_length": 10000,
+    "max_response_length": 3072,
+    "ppo_max_token_len_per_gpu": 32000,
+    "rollout_max_num_batched_tokens": 16384,
+    "max_turns": 4,
+    "budget_seconds": 7200,
+    "seed": 0,
+    "learning_rate": 1e-06,
+    "lr_warmup_steps": 0,
+    "resume_mode": "disable",
+    "checkpoint_save_freq": 5,
+    "gpu_devices": [
+      0
+    ],
+    "limitation": "Existing 40-document five-source retrieval subset; timing pilot only, not full MedCorp or paper benchmark"
+  },
+  "runtime": {
+    "scope": "timing_pilot_40_docs_not_paper_result",
+    "run_name": "faithmed-timing-v1",
+    "owner": "faithmed-timing-v1:0d093bdb-d378-456b-b328-ed45d6fc49f3",
+    "returncode": 0,
+    "elapsed_seconds": 2098.3414380303584,
+    "budget_seconds": 7200,
+    "cleaned_tagged_pids": [],
+    "cleanup_error": null,
+    "gpu0_csv": "/data/fby/faithmed/logs/gpu0-faithmed-timing-v1-0d093bdb-d378-456b-b328-ed45d6fc49f3.csv"
+  },
+  "exit_code": 0,
+  "training_timing": {
+    "definition": "Trainer timing_s/step minus timing_s/save_checkpoint and timing_s/testing. Excludes pre-training startup; retains generation/API waits and first-step warmup.",
+    "completed_steps": 5,
+    "net_step_seconds": [
+      496.637,
+      327.865,
+      267.457,
+      357.741,
+      509.85800000000006
+    ],
+    "total_net_seconds": 1959.558,
+    "mean_net_step_seconds": 391.9116,
+    "min_net_step_seconds": 267.457,
+    "max_net_step_seconds": 509.85800000000006,
+    "mean_steps_2_to_5_seconds": 365.73025,
+    "checkpoint_save_seconds": 52.049,
+    "per_step": [
+      {
+        "actor/grad_norm": 1.208,
+        "actor/lr": 0,
+        "training/global_step": 1,
+        "response_length/mean": 636.336,
+        "response_length/max": 3072,
+        "prompt_length/mean": 1809.497,
+        "prompt_length/max": 7185,
+        "episode/length/mean": 2.746,
+        "episode/tool_call_count/mean": 0.004,
+        "timing_s/gen": 339.174,
+        "timing_s/reward": 0.432,
+        "timing_s/old_log_prob": 25.394,
+        "timing_s/ref": 36.038,
+        "timing_s/adv": 0.619,
+        "timing_s/update_actor": 94.645,
+        "timing_s/step": 496.637,
+        "perf/total_num_tokens": 1878400,
+        "perf/throughput": 3782.242,
+        "net_training_seconds": 496.637
+      },
+      {
+        "actor/grad_norm": 1.149,
+        "actor/lr": 0,
+        "training/global_step": 2,
+        "response_length/mean": 671.629,
+        "response_length/max": 3072,
+        "prompt_length/mean": 1661.072,
+        "prompt_length/max": 6484,
+        "episode/length/mean": 2.75,
+        "episode/tool_call_count/mean": 0.027,
+        "timing_s/gen": 194.721,
+        "timing_s/reward": 0.403,
+        "timing_s/old_log_prob": 22.321,
+        "timing_s/ref": 24.067,
+        "timing_s/adv": 0.474,
+        "timing_s/update_actor": 85.63,
+        "timing_s/step": 327.865,
+        "perf/total_num_tokens": 1791514,
+        "perf/throughput": 5464.174,
+        "net_training_seconds": 327.865
+      },
+      {
+        "actor/grad_norm": 1.142,
+        "actor/lr": 0,
+        "training/global_step": 3,
+        "response_length/mean": 612.342,
+        "response_length/max": 3072,
+        "prompt_length/mean": 1418.289,
+        "prompt_length/max": 5848,
+        "episode/length/mean": 2.309,
+        "episode/tool_call_count/mean": 0.008,
+        "timing_s/gen": 169.772,
+        "timing_s/reward": 0.303,
+        "timing_s/old_log_prob": 17.645,
+        "timing_s/ref": 16.137,
+        "timing_s/adv": 0.444,
+        "timing_s/update_actor": 62.901,
+        "timing_s/step": 267.457,
+        "perf/total_num_tokens": 1299604,
+        "perf/throughput": 4859.12,
+        "net_training_seconds": 267.457
+      },
+      {
+        "actor/grad_norm": 0.966,
+        "actor/lr": 0,
+        "training/global_step": 4,
+        "response_length/mean": 773.81,
+        "response_length/max": 3072,
+        "prompt_length/mean": 1779.111,
+        "prompt_length/max": 8723,
+        "episode/length/mean": 2.508,
+        "episode/tool_call_count/mean": 0.039,
+        "timing_s/gen": 206.224,
+        "timing_s/reward": 0.689,
+        "timing_s/old_log_prob": 26.588,
+        "timing_s/ref": 26.276,
+        "timing_s/adv": 0.563,
+        "timing_s/update_actor": 96.778,
+        "timing_s/step": 357.741,
+        "perf/total_num_tokens": 1960643,
+        "perf/throughput": 5480.618,
+        "net_training_seconds": 357.741
+      },
+      {
+        "actor/grad_norm": 1.199,
+        "actor/lr": 0,
+        "training/global_step": 5,
+        "response_length/mean": 725.228,
+        "response_length/max": 3072,
+        "prompt_length/mean": 1472.577,
+        "prompt_length/max": 6782,
+        "episode/length/mean": 2.258,
+        "episode/tool_call_count/mean": 0.051,
+        "timing_s/gen": 407.618,
+        "timing_s/reward": 0.327,
+        "timing_s/old_log_prob": 17.728,
+        "timing_s/ref": 17.532,
+        "timing_s/adv": 0.491,
+        "timing_s/update_actor": 65.877,
+        "timing_s/save_checkpoint": 52.049,
+        "timing_s/step": 561.907,
+        "perf/total_num_tokens": 1406595,
+        "perf/throughput": 2503.253,
+        "net_training_seconds": 509.85800000000006
+      }
+    ],
+    "lr_log_caveat": "Console rounds numeric metrics to 3 decimals: actor/lr:0.000 is display rounding; final optimizer exact lr is 1e-6.",
+    "remaining_outer_wall_seconds": 86.7344380303584,
+    "remaining_outer_wall_caveat": "Unattributed startup, shutdown, and other outer overhead; not included in net step timing."
+  },
+  "judge": {
+    "states": {
+      "ok": 1313
+    },
+    "http_attempts": 1318,
+    "attempt_errors": {
+      "HTTPError": 3,
+      "TimeoutError": 2
+    },
+    "http_status_counts": {
+      "200": 1313,
+      "500": 3,
+      "None": 2
+    },
+    "recovered_requests_after_transport_error": 5,
+    "usage_numeric_totals": {
+      "prompt_tokens": 5399567,
+      "completion_tokens": 41416,
+      "total_tokens": 5440983
+    },
+    "usage_scope": "Numeric usage from all attempts that recorded usage, including successful recovered requests; unavailable usage from failed transports is not estimated.",
+    "transport_errors_recovered": 5,
+    "unrecovered_request_count": 0,
+    "http_429_count": 0,
+    "http_5xx_count": 3
+  },
+  "optimizer_check": {
+    "path": "/data/fby/faithmed/outputs/faithmed-timing-v1/checkpoints/faithmed-timing-v1/global_step_5/actor/optim_world_size_1_rank_0.pt",
+    "file_bytes": 13764627344,
+    "device": "cpu",
+    "torch_threads": 8,
+    "state_entries": 29,
+    "state_entries_with_step": 29,
+    "step_histogram": {
+      "28.0": 29
+    },
+    "step_min": 28,
+    "step_max": 28,
+    "steps_finite": true,
+    "param_groups": [
+      {
+        "parameters": 29,
+        "lr": 1e-06,
+        "initial_lr": 1e-06
+      }
+    ],
+    "load_check_seconds": 0.0037703514099121094
+  },
+  "gpu_sampling": {
+    "utilization.gpu": {
+      "min": 0,
+      "mean": 41.383495145631066,
+      "max": 100
+    },
+    "memory.used": {
+      "min": 4,
+      "mean": 83806.06310679612,
+      "max": 140953
+    },
+    "memory.total": {
+      "min": 143771,
+      "mean": 143771,
+      "max": 143771
+    },
+    "power.draw": {
+      "min": 80.57,
+      "mean": 346.3805339805825,
+      "max": 700.32
+    },
+    "samples": 206,
+    "first_timestamp": "2026/11/03 12:35:55.553",
+    "last_timestamp": "2026/11/03 13:10:44.056",
+    "sample_file": "/data/fby/faithmed/logs/gpu0-faithmed-timing-v1-0d093bdb-d378-456b-b328-ed45d6fc49f3.csv",
+    "scope": "Entire sampled outer run including startup, idle/API waits and checkpoint saving; not isolated per-step.",
+    "units": {
+      "memory.used": "MiB",
+      "memory.total": "MiB",
+      "utilization.gpu": "percent",
+      "power.draw": "W"
+    }
+  },
+  "post_run_gpu0": {
+    "uuid": "GPU-5623f109-788d-6996-a63a-9eef39355b9e",
+    "memory_used_MiB": 4,
+    "utilization_percent": 0,
+    "compute_processes": 0,
+    "released": true,
+    "observation_order": "Read after exit code 0 and before final monitor snapshot at 2026-11-03T13:12:24.030084+00:00"
+  },
+  "conditional_300_step_projection": {
+    "scope": "Only the current single GPU0 Qwen3-1.7B, 40-document exact-search pilot configuration; not a reliable estimate for full corpus, formal DiskANN, or paper 4-GPU training.",
+    "based_on_all_5_steps_hours": 32.6593,
+    "based_on_steps_2_to_5_hours": 30.477520833333333,
+    "excludes": "Startup, checkpoint saving, evaluation and unobserved future API/data variation."
+  },
+  "evidence": {
+    "worker_log": "/data/fby/faithmed/tmp/ray/ray/session_2026-11-03_12-36-01_517245_334656/logs/worker-b56fd1da3662118849d264e6303ad3e94a6a4539b7328987373618d7-01000000-359582.out",
+    "gpu_csv": "/data/fby/faithmed/logs/gpu0-faithmed-timing-v1-0d093bdb-d378-456b-b328-ed45d6fc49f3.csv",
+    "judge_database": "/data/fby/faithmed/outputs/faithmed-timing-v1/judge/judge.sqlite",
+    "runtime_status": "/data/fby/faithmed/logs/faithmed-timing-v1-bounded-status.json"
+  },
+  "stopping_boundary": "Finished only the authorized five-step test and CPU optimizer metadata check. No follow-on evaluation or full training started by this monitoring task."
+}

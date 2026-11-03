@@ -1,0 +1,44 @@
+{
+  "repository": "Qwen/Qwen3-4B",
+  "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "endpoint": "https://hf-mirror.com",
+  "local_model_path": "/data/fby/faithmed/models/Qwen3-4B",
+  "cache_path": "/data/fby/faithmed/cache/qwen3-4b",
+  "precision": "bfloat16",
+  "device": "cpu",
+  "threads": 8,
+  "preparation_status": "ready",
+  "purpose": "second model scale for later training/evaluation; no training started",
+  "validation": {
+    "repository": "Qwen/Qwen3-4B",
+    "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+    "status": "ready",
+    "device": "cpu",
+    "threads": 8,
+    "dtype": "torch.bfloat16",
+    "parameter_count": 4022468096,
+    "embedding_shape": [
+      151936,
+      2560
+    ],
+    "lm_head_shape": [
+      151936,
+      2560
+    ],
+    "input_shape": [
+      1,
+      5
+    ],
+    "logits_shape": [
+      1,
+      5,
+      151936
+    ],
+    "logits_finite": true,
+    "total_file_bytes": 8060908199,
+    "weight_bytes": 8044982000,
+    "elapsed_seconds": 170.75174236297607,
+    "scope": "CPU offline local load and five-token forward only; no training or dataset evaluation"
+  },
+  "network_resume": "Hugging Face client resumed two HTTP read timeouts in the same download; no model/protocol failures"
+}
