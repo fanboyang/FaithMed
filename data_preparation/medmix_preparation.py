@@ -1,7 +1,10 @@
 import os
 import argparse
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
+from pathlib import Path
+import tempfile
+import zipfile
 
 import datasets
 
@@ -278,30 +281,7 @@ def make_medxpertqa_map_fn(data_source, split):
     return process_fn
 
 
-def collect_train_splits(dataset):
-    splits = []
-    for split_name in ["train", "validation", "valid", "dev"]:
-        if split_name in dataset:
-            splits.append((split_name, dataset[split_name]))
-    return splits
-
-
-def collect_test_split(dataset):
-    if "test" in dataset:
-        return "test", dataset["test"]
-    raise ValueError("Dataset does not contain a test split.")
-
-
-def load_dataset_splits(data_src, config=None):
-    if config:
-        dataset = datasets.load_dataset(data_src, config)
-    else:
-        dataset = datasets.load_dataset(data_src)
-    return collect_train_splits(dataset), collect_test_split(dataset)
-
-
 def filter_headqa_no_image(split):
-    split = split.cast_column("image", datasets.Image(decode=False))
     return split.filter(lambda x: x["image"] is None)
 
 
@@ -350,182 +330,272 @@ def cap_dataset_per_source(dataset, per_source_limit):
     return dataset.select(kept_indices), dict(source_counts)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--save_dir", required=True, help="data path to save the parquet files")
-    parser.add_argument("--output_name", default="medmix", help="output folder name under save_dir")
-    parser.add_argument("--train_limit", action="store_true", help="limit final train rows to 10000 per data_source")
-    parser.add_argument("--test_limit", action="store_true", help="limit final test rows to 1000 per data_source")
-    
-    args = parser.parse_args()
-    output_dir = os.path.join(args.save_dir, args.output_name)
-    os.makedirs(output_dir, exist_ok=True)
-    log_path = os.path.join(output_dir, "preprocess.log")
-    log_lines = []
+# 固定官方入口；仅HeadQA经仓库内官方zip读取，不执行HF远程Python脚本。
+DATASET_SPECS = [
+    dict(name="openlifescienceai/medqa", revision="153e61cdd129eb79d3c27f82cdf3bc5e018c11b0", config=None,
+         map_fn=make_medqa_map_fn, train_splits=["train", "dev"], test_splits=["test"]),
+    dict(name="dvilares/head_qa", revision="d444ead98dd50d7949703c1662c7880a5c1ea77d", config="en",
+         map_fn=make_headqa_map_fn, train_splits=["train", "validation"], test_splits=["test"], filter="no_image"),
+    dict(name="openlifescienceai/medmcqa", revision="91c6572c454088bf71b679ad90aa8dffcd0d5868", config=None,
+         map_fn=make_medmcqa_map_fn, train_splits=["train"], test_splits=["validation"]),
+    dict(name="ncbi/MedCalc-Bench", revision="83a1a56d6b53f8d4c0e03f0ba9699becf524a595", config=None,
+         map_fn=make_medcalcbench_map_fn, train_splits=["train"], test_splits=["test"]),
+    dict(name="JesseLiu/medbulltes5op", revision="4e85cbaaf07a2435decd568e54b046fb955d8cd4", config=None,
+         map_fn=make_medbullets_map_fn, train_splits=[], test_splits=["test"]),
+    dict(name="TIGER-Lab/MMLU-Pro", revision="b189ec765aa7ed75c8acfea42df31fdae71f97be", config=None,
+         map_fn=make_mmlu_pro_health_map_fn, train_splits=[], test_splits=["test"], filter="health"),
+    dict(name="TsinghuaC3I/MedXpertQA", revision="7e7c465a68eb2b866926bfa59c8c9d17a8daba65", config="Text",
+         map_fn=make_medxpertqa_map_fn, train_splits=[], test_splits=["test"]),
+]
+MEDCALC_SOURCE = "ncbi/MedCalc-Bench"
 
-    def select_splits(dataset, split_names):
-        return [(name, dataset[name]) for name in split_names if name in dataset]
 
-    def filter_mmlu_health(split):
-        return split.filter(lambda x: (x.get("category") or "").lower() == "health")
+def require_text(value, field):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be a nonempty string")
+    return value
 
-    dataset_specs = [
-        {
-            "name": "openlifescienceai/medqa",
-            "config": None,
-            "map_fn": make_medqa_map_fn,
-            "train_splits": ["train", "dev"],
-            "test_splits": ["test"],
-        },
-        {
-            "name": "dvilares/head_qa",
-            "config": "en",
-            "map_fn": make_headqa_map_fn,
-            "train_splits": ["train", "validation"],
-            "test_splits": ["test"],
-            "filter_fn": filter_headqa_no_image,
-            "filter_splits": ["train", "validation", "test"],
-        },
-        {
-            "name": "openlifescienceai/medmcqa",
-            "config": None,
-            "map_fn": make_medmcqa_map_fn,
-            "train_splits": ["train"],
-            "test_splits": ["validation"],
-        },
-        {
-            "name": "ncbi/MedCalc-Bench",
-            "config": None,
-            "map_fn": make_medcalcbench_map_fn,
-            "train_splits": ["train"],
-            "test_splits": ["test"],
-        },
-        {
-            "name": "JesseLiu/medbulltes5op",
-            "config": None,
-            "map_fn": make_medbullets_map_fn,
-            "train_splits": [],
-            "test_splits": ["test"],
-        },
-        {
-            "name": "TIGER-Lab/MMLU-Pro",
-            "config": None,
-            "map_fn": make_mmlu_pro_health_map_fn,
-            "train_splits": [],
-            "test_splits": ["test"],
-            "filter_fn": filter_mmlu_health,
-            "filter_splits": ["test"],
-        },
-        {
-            "name": "TsinghuaC3I/MedXpertQA",
-            "config": "Text",
-            "map_fn": make_medxpertqa_map_fn,
-            "train_splits": [],
-            "test_splits": ["test"],
-        },
-    ]
 
-    train_parts = []
-    test_parts = []
+def validate_options(options):
+    if not isinstance(options, dict) or not 2 <= len(options) <= 26:
+        raise ValueError("options must contain 2..26 choices")
+    if sorted(options) != [chr(65+i) for i in range(len(options))]:
+        raise ValueError("options must use consecutive A..Z keys")
+    for key, value in options.items():
+        require_text(value, f"option {key}")
 
-    for spec in dataset_specs:
-        print(f"processing dataset: {spec['name']}")
-        dataset = datasets.load_dataset(spec["name"], spec["config"])
-        last_example = None
-        for split_name, train_split in select_splits(dataset, spec["train_splits"]):
-            if spec.get("filter_fn") and split_name in spec.get("filter_splits", []):
-                train_split = spec["filter_fn"](train_split)
-            log_lines.append(
-                f"adding {len(train_split)} rows from {spec['name']} dataset {split_name} split"
-            )
-            mapped = train_split.map(
-                function=spec["map_fn"](spec["name"], "train"),
-                with_indices=True,
-                remove_columns=train_split.column_names,
-            )
-            train_parts.append(mapped)
-            if len(mapped) > 0:
-                last_example = mapped[-1]
-        for split_name, test_split in select_splits(dataset, spec["test_splits"]):
-            if spec.get("filter_fn") and split_name in spec.get("filter_splits", []):
-                test_split = spec["filter_fn"](test_split)
-            log_lines.append(
-                f"adding {len(test_split)} rows from {spec['name']} dataset {split_name} split"
-            )
-            mapped_test = test_split.map(
-                function=spec["map_fn"](spec["name"], split_name),
-                with_indices=True,
-                remove_columns=test_split.column_names,
-            )
-            test_parts.append(mapped_test)
-            if len(mapped_test) > 0:
-                last_example = mapped_test[-1]
-        # log last example for inspection
-        if last_example is not None:
-            log_lines.append(f"last example from {spec['name']}:")
-            log_lines.append(json.dumps(last_example, ensure_ascii=True, indent=2))
-        print(f"finished dataset: {spec['name']}")
 
-    train_dataset = datasets.concatenate_datasets(train_parts).shuffle(seed=42)
-    test_dataset = datasets.concatenate_datasets(test_parts).shuffle(seed=42)
+def validate_choice(label, options):
+    validate_options(options)
+    if not isinstance(label, str) or label not in options:
+        raise ValueError(f"invalid label {label!r}")
 
-    # 16-gram deduplication between test and train (question text only),
-    # applied only to non-MedCalcBench samples.
-    print("starting 16-gram deduplication (test -> train)")
-    medcalc_source = "ncbi/MedCalc-Bench"
-    train_before = len(train_dataset)
-    test_before = len(test_dataset)
-    non_medcalc_test = test_dataset.filter(lambda x: x.get("data_source") != medcalc_source)
+
+def select_splits(dataset, split_names, source):
+    missing = [name for name in split_names if name not in dataset]
+    if missing:
+        raise ValueError(f"{source}: required splits missing: {missing}")
+    return [(name, dataset[name]) for name in split_names]
+
+
+def validate_source_counts(train_counts, test_counts):
+    expected_train = {s["name"] for s in DATASET_SPECS if s["train_splits"]}
+    expected_test = {s["name"] for s in DATASET_SPECS}
+    for kind, counts, expected in [("train", train_counts, expected_train), ("test", test_counts, expected_test)]:
+        if set(counts) != expected or any(type(n) is not int or n <= 0 for n in counts.values()):
+            raise ValueError(f"{kind}: incomplete sources or empty source; expected {sorted(expected)}, got {counts}")
+
+
+def load_headqa_archive(archive_path):
+    """逐字读取官方HEAD_EN三个JSON；图片路径仅作为无图过滤标记，不解压PDF。"""
+    split_files = {"train": "train_HEAD_EN.json", "validation": "dev_HEAD_EN.json", "test": "test_HEAD_EN.json"}
+    output = {}
+    with zipfile.ZipFile(archive_path) as archive:
+        for split, filename in split_files.items():
+            suffix = f"HEAD_EN/{filename}"
+            matches = [name for name in archive.namelist() if name == suffix or name.endswith("/"+suffix)]
+            if len(matches) != 1:
+                raise ValueError(f"HeadQA archive: required member {suffix} has {len(matches)} matches")
+            with archive.open(matches[0]) as stream:
+                payload = json.load(stream)
+            if not isinstance(payload.get("exams"), dict):
+                raise ValueError(f"HeadQA {split}: exams must be an object")
+            rows = []
+            for exam in payload["exams"].values():
+                for question in exam["data"]:
+                    image = require_image_marker(question["image"])
+                    rows.append({
+                        "name": require_text(exam["name"], "exam name").strip(),
+                        "year": require_text(exam["year"], "year").strip(),
+                        "category": require_text(exam["category"], "category").strip(),
+                        "qid": int(question["qid"]), "qtext": require_text(question["qtext"], "qtext").strip(),
+                        "ra": int(question["ra"]), "image": image,
+                        "answers": [{"aid": int(answer["aid"]),
+                                     "atext": require_text(answer["atext"], "atext").strip()}
+                                    for answer in question["answers"]],
+                    })
+            if not rows:
+                raise ValueError(f"HeadQA {split}: empty official split")
+            output[split] = datasets.Dataset.from_list(rows)
+    return datasets.DatasetDict(output)
+
+
+def require_image_marker(value):
+    if not isinstance(value, str):
+        raise ValueError("HeadQA image marker must be a string")
+    return value.strip() or None
+
+
+def load_source(spec, cache_dir=None):
+    if spec["name"] == "dvilares/head_qa":
+        from huggingface_hub import hf_hub_download
+        path = hf_hub_download(repo_id=spec["name"], repo_type="dataset", revision=spec["revision"],
+                               filename="data/head-qa-es-en-pdfs.zip")
+        return load_headqa_archive(path)
+    return datasets.load_dataset(spec["name"], name=spec["config"], revision=spec["revision"], cache_dir=cache_dir)
+
+
+def map_validated_row(spec, row, index, source_split, target_split):
+    name = spec["name"]
+    try:
+        if name == "openlifescienceai/medqa":
+            raw = row["data"]
+            require_text(raw["Question"], "Question")
+            validate_choice(raw["Correct Option"], raw["Options"])
+        elif name == "dvilares/head_qa":
+            require_text(row["qtext"], "qtext")
+            answers = row["answers"]
+            aids = [str(a["aid"]) for a in answers]
+            if len(aids) != len(set(aids)) or str(row["ra"]) not in aids:
+                raise ValueError("invalid HeadQA label or duplicate aid")
+            ordered = sorted(answers, key=lambda a: int(a["aid"]))
+            validate_options({chr(65+i): a["atext"] for i, a in enumerate(ordered)})
+        elif name == "openlifescienceai/medmcqa":
+            require_text(row["question"], "question")
+            options = {chr(65+i): row["op"+key] for i, key in enumerate("abcd")}
+            cop = row["cop"]
+            if type(cop) is not int or not 0 <= cop < 4:
+                raise ValueError(f"invalid medmcqa label {cop!r}")
+            validate_choice(chr(65+cop), options)
+        elif name == MEDCALC_SOURCE:
+            require_text(row["Question"], "Question")
+            require_text(row["Patient Note"], "Patient Note")
+            require_text(row["Ground Truth Answer"], "label")
+        elif name == "JesseLiu/medbulltes5op":
+            require_text(row["question"], "question")
+            validate_choice(row["answer_idx"], {key: row["choices"+key] for key in "ABCDE"})
+        elif name == "TIGER-Lab/MMLU-Pro":
+            require_text(row["question"], "question")
+            options = {chr(65+i): value for i, value in enumerate(row["options"])}
+            validate_choice(row["answer"], options)
+            answer_index = row["answer_index"]
+            if type(answer_index) is not int or answer_index != ord(row["answer"])-65:
+                raise ValueError("MMLU-Pro answer_index contradicts label")
+        elif name == "TsinghuaC3I/MedXpertQA":
+            require_text(row["question"], "question")
+            validate_choice(row["label"], row["options"])
+        else:
+            raise ValueError(f"unknown source {name}")
+        result = spec["map_fn"](name, target_split)(row, index)
+        require_text(result["extra_info"]["qid"], "qid")
+        if result["extra_info"]["qid"] == "None":
+            raise ValueError("qid is missing")
+        result["extra_info"]["source_split"] = source_split
+        result["extra_info"]["uid"] = f"{name}:{source_split}:{index}"
+        return result
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"{name}/{source_split} row {index}: {error}") from error
+
+
+def source_counts(dataset):
+    return dict(Counter(dataset["data_source"]))
+
+
+def overlap_audit(train, test):
+    """只统计，不扩大作者去重范围。比较字段为作者渲染后的question（含选项）。"""
+    train_keys = Counter(normalize_question_text(r["extra_info"]["question"]) for r in train)
+    test_keys = Counter(normalize_question_text(r["extra_info"]["question"]) for r in test)
+    shared = set(train_keys) & set(test_keys)
+    return {
+        "train_duplicate_rows_beyond_first": sum(n-1 for n in train_keys.values()),
+        "test_duplicate_rows_beyond_first": sum(n-1 for n in test_keys.values()),
+        "exact_shared_questions": len(shared),
+        "exact_overlap_train_rows": sum(train_keys[k] for k in shared),
+        "exact_overlap_test_rows": sum(test_keys[k] for k in shared),
+        "short_train_rows_under_16_words": sum(n for k, n in train_keys.items() if len(k.split()) < 16),
+        "short_test_rows_under_16_words": sum(n for k, n in test_keys.items() if len(k.split()) < 16),
+        "medcalc_train_rows_exempt": source_counts(train).get(MEDCALC_SOURCE, 0),
+        "medcalc_test_rows_exempt": source_counts(test).get(MEDCALC_SOURCE, 0),
+    }
+
+
+def prepare_data(output_dir, cache_dir=None, loader=None):
+    """完整七源、作者16-gram规则与10k训练cap；整目录原子发布，不覆盖旧结果。"""
+    output_dir = Path(output_dir).expanduser().resolve()
+    if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
+        raise ValueError(f"output directory is not empty: {output_dir}")
+    train_parts, test_parts, loading = [], [], {}
+    for spec in DATASET_SPECS:
+        print(f"processing dataset: {spec['name']} @ {spec['revision']}", flush=True)
+        dataset = (loader or load_source)(spec, cache_dir=cache_dir)
+        loading[spec["name"]] = {}
+        for target, requested, parts in [("train", spec["train_splits"], train_parts),
+                                          ("test", spec["test_splits"], test_parts)]:
+            for split_name, split in select_splits(dataset, requested, spec["name"]):
+                raw_count = len(split)
+                if spec.get("filter") == "no_image":
+                    split = filter_headqa_no_image(split)
+                elif spec.get("filter") == "health":
+                    split = split.filter(lambda row: (row.get("category") or "").lower() == "health")
+                if not len(split):
+                    raise ValueError(f"{spec['name']}/{split_name}: source empty after author filtering")
+                loading[spec["name"]][split_name] = {"target": target, "raw_rows": raw_count,
+                                                     "retained_rows": len(split)}
+                mapped = split.map(
+                    lambda row, idx: map_validated_row(spec, row, idx, split_name,
+                                                       "train" if target == "train" else split_name),
+                    with_indices=True, remove_columns=split.column_names, load_from_cache_file=False,
+                )
+                parts.append(mapped)
+    train = datasets.concatenate_datasets(train_parts).shuffle(seed=42)
+    test = datasets.concatenate_datasets(test_parts).shuffle(seed=42)
+    validate_source_counts(source_counts(train), source_counts(test))
+    before_counts = source_counts(train)
+    before_audit = overlap_audit(train, test)
+    non_medcalc_test = test.filter(lambda row: row["data_source"] != MEDCALC_SOURCE)
     test_ngrams = collect_ngrams_from_questions(non_medcalc_test, n=16)
-    train_medcalc_before = sum(1 for x in train_dataset if x.get("data_source") == medcalc_source)
-    train_non_medcalc_before = train_before - train_medcalc_before
-    train_dataset = train_dataset.filter(
-        lambda x: (
-            x.get("data_source") == medcalc_source
-            or not has_ngram_overlap(x.get("extra_info", {}).get("question"), test_ngrams, n=16)
-        )
-    )
-    train_after = len(train_dataset)
-    train_medcalc_after = sum(1 for x in train_dataset if x.get("data_source") == medcalc_source)
-    train_non_medcalc_after = train_after - train_medcalc_after
-    print("finished 16-gram deduplication")
-    log_lines.append(
-        "16-gram deduplication between test and train (question text only, excluding MedCalcBench)"
-    )
-    log_lines.append(f"train before: {train_before}")
-    log_lines.append(f"train after: {train_after}")
-    log_lines.append(f"train removed: {train_before - train_after}")
-    log_lines.append(f"train non-medcalc before: {train_non_medcalc_before}")
-    log_lines.append(f"train non-medcalc after: {train_non_medcalc_after}")
-    log_lines.append(f"train non-medcalc removed: {train_non_medcalc_before - train_non_medcalc_after}")
-    log_lines.append(f"train medcalc kept: {train_medcalc_after}")
-    log_lines.append(f"test size: {test_before}")
-    log_lines.append(f"test non-medcalc size used for n-grams: {len(non_medcalc_test)}")
-    log_lines.append(f"test unique 16-grams: {len(test_ngrams)}")
+    train = train.filter(lambda row: row["data_source"] == MEDCALC_SOURCE or not has_ngram_overlap(
+        row["extra_info"]["question"], test_ngrams, n=16))
+    after_ngram_counts = source_counts(train)
+    train, _ = cap_dataset_per_source(train, 10000)
+    train_counts, test_counts = source_counts(train), source_counts(test)
+    validate_source_counts(train_counts, test_counts)
+    manifest = {
+        "status": "complete", "protocol": "FaithMed main-table no-SFT", "seed": 42,
+        "train_cap_per_source": 10000, "test_limit": None, "sft_exclusion": "not applicable: no SFT",
+        "sources": [{k: v for k, v in spec.items() if k != "map_fn"} for spec in DATASET_SPECS],
+        "loading_counts": loading, "train_counts_before_ngram": before_counts,
+        "train_counts_after_ngram": after_ngram_counts, "train_counts": train_counts,
+        "test_counts": test_counts, "train_rows": len(train), "test_rows": len(test),
+        "deduplication": {"n": 16, "normalized_field": "extra_info.question (includes rendered options)",
+                          "direction": "non-MedCalc test -> non-MedCalc train",
+                          "unique_test_ngrams": len(test_ngrams),
+                          "removed_train_rows": sum(before_counts.values())-sum(after_ngram_counts.values()),
+                          "limitations": ["MedCalc train and test are excluded", "questions shorter than 16 words are uncovered",
+                                          "no within-split deduplication", "no semantic or paraphrase matching"],
+                          "audit_before": before_audit, "audit_final": overlap_audit(train, test)},
+    }
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f".{output_dir.name}.partial-", dir=output_dir.parent) as temporary:
+        staging = Path(temporary)
+        train.to_parquet(str(staging/"train.parquet"))
+        test.to_parquet(str(staging/"test.parquet"))
+        from pyarrow.parquet import ParquetFile
+        for split, expected in [("train", len(train)), ("test", len(test))]:
+            actual = ParquetFile(staging/f"{split}.parquet").metadata.num_rows
+            if actual != expected:
+                raise ValueError(f"{split}: parquet row count {actual} != {expected}")
+        (staging/"manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+        (staging/"preprocess.log").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+        if output_dir.exists():
+            output_dir.rmdir()  # 仅允许已核验为空的目录；并发写入会显式失败。
+        staging.replace(output_dir)
+    print(json.dumps({"output_dir": str(output_dir), "train_counts": train_counts, "test_counts": test_counts}, indent=2))
+    return manifest
 
-    if args.train_limit:
-        train_before_limit = len(train_dataset)
-        train_dataset, train_kept_per_source = cap_dataset_per_source(train_dataset, 10000)
-        log_lines.append("applied train per-source cap after 16-gram filtering: 10000")
-        log_lines.append(f"train before cap: {train_before_limit}")
-        log_lines.append(f"train after cap: {len(train_dataset)}")
-        for source in sorted(train_kept_per_source.keys()):
-            log_lines.append(f"train kept for {source}: {train_kept_per_source[source]}")
 
-    if args.test_limit:
-        test_before_limit = len(test_dataset)
-        test_dataset, test_kept_per_source = cap_dataset_per_source(test_dataset, 1000)
-        log_lines.append("applied test per-source cap after 16-gram filtering: 1000")
-        log_lines.append(f"test before cap: {test_before_limit}")
-        log_lines.append(f"test after cap: {len(test_dataset)}")
-        for source in sorted(test_kept_per_source.keys()):
-            log_lines.append(f"test kept for {source}: {test_kept_per_source[source]}")
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="FaithMed no-SFT full evaluation preparation")
+    destination = parser.add_mutually_exclusive_group(required=True)
+    destination.add_argument("--save_dir", help="兼容作者入口：实际输出save_dir/output_name")
+    destination.add_argument("--outputdir", help="最终原子发布目录")
+    parser.add_argument("--output_name", default="medmix")
+    parser.add_argument("--cache_dir", help="HF datasets缓存；Hub下载缓存由HF_HOME管理")
+    parser.add_argument("--train_limit", action="store_true", help="兼容旧flag；no-SFT协议始终cap10000/source")
+    args = parser.parse_args(argv)
+    output = args.outputdir if args.outputdir else os.path.join(args.save_dir, args.output_name)
+    return prepare_data(output, cache_dir=args.cache_dir)
 
-    log_lines.append(f"final train rows: {len(train_dataset)}")
-    log_lines.append(f"final valid rows: {len(test_dataset)}")
 
-    with open(log_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(log_lines))
-
-    train_dataset.to_parquet(os.path.join(output_dir, "train.parquet"))
-    test_dataset.to_parquet(os.path.join(output_dir, "test.parquet"))
+if __name__ == "__main__":
+    main()

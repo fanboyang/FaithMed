@@ -1,0 +1,9 @@
+{
+  "paper": "https://aclanthology.org/2026.emnlp-main.1619/",
+  "pdf": "https://aclanthology.org/2026.emnlp-main.1619.pdf",
+  "arxiv": "https://arxiv.org/abs/2607.01440",
+  "official_code": "https://github.com/cxcscmu/FaithMed",
+  "upstream_commit": "095f4e6f099260c7a515c36808db44261abc76ca",
+  "judge_model_docs": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+  "verified_date": "2026-11-03"
+}

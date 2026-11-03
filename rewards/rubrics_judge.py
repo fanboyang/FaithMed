@@ -3,7 +3,7 @@ rubrics_judge.py — LLM-as-Judge process reward for MedRM RL training.
 
 For each GRPO rollout group (group_n trajectories for the same question):
   1. Extract trajectory features from env.memory_context (in-memory, no disk I/O).
-  2. Score all active rubrics via Gemini-2.5-flash — one batched call per trajectory,
+  2. Score all active rubrics via GPT-6-Luna — one batched call per trajectory,
      all trajectories in parallel (ThreadPoolExecutor).
   3. For each rubric R, mean-centre scores within the applicable subset
      (trajectories where R is not N/A).
@@ -11,31 +11,25 @@ For each GRPO rollout group (group_n trajectories for the same question):
   4. process_reward[T] = mean of centred scores over all applicable rubrics.
   5. Caller adds:  final_reward = outcome_reward + lambda_weight * process_reward.
 
-Rubric file and Gemini backend are identical to rubric-refining/scorer.py.
+Rubric prompt is retained; the audited judge backend is GPT-6-Luna.
 """
 
 import json
-import os
-import random
 import re
 import threading
-import time
 from pathlib import Path
 from typing import Optional
 
 import yaml
-from dotenv import load_dotenv
+from reproduction.judge_client import from_environment
 
-load_dotenv(os.environ["KEYS_ENV_PATH"], override=False)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-GEMINI_MODEL    = "gemini-2.5-flash-lite"
-MAX_WORKERS     = 8     # max concurrent Gemini calls
+JUDGE_MODEL = "gpt-6-luna"
+MAX_WORKERS     = 8     # max concurrent judge calls
 LAMBDA_DEFAULT  = 0.05
 _RUBRICS_FILE   = Path(__file__).parent.parent / "rubric-refining" / "rubrics.yaml"
 _rubrics_cache: list[dict] | None = None
 
-# Debug: print Gemini input/output for the first N trajectories scored.
+# Debug: print judge input/output for the first N trajectories scored.
 # Controlled by PROCESS_REWARD_DEBUG env var (0 = silent).
 # Read lazily on first use so MedRMEnv.__init__ has time to set the env var.
 _DEBUG_MAX_TRAJ: int = 0   # set via configure_debug() from MedRMEnv.__init__
@@ -48,9 +42,9 @@ def configure_debug(debug_max_traj: int) -> None:
 
 
 def configure_gemini_model(model: str) -> None:
-    """Called once from MedRMEnv.__init__ to propagate gemini_model config."""
-    global GEMINI_MODEL
-    GEMINI_MODEL = model
+    """Legacy launcher configuration hook; rejects an unintended judge model."""
+    if model != JUDGE_MODEL:
+        raise ValueError("FaithMed judge is fixed to gpt-6-luna for this reproduction")
 _debug_traj_count = 0
 _debug_traj_lock  = threading.Lock()
 _debug_centering_done = False  # print group centering only once
@@ -160,34 +154,21 @@ Score this trajectory on EVERY rubric listed above.
 """
 
 
-_gemini_client = None   # google.genai.Client singleton
+_judge_client = None
+_judge_client_lock = threading.Lock()
 
 
-def _get_gemini_client():
-    global _gemini_client
-    if _gemini_client is None:
-        from google import genai
-        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    return _gemini_client
-
-
-def _call_gemini(prompt: str, max_output_tokens: int = 512) -> str:
-    from google.genai import types
-    client = _get_gemini_client()
-    config = types.GenerateContentConfig(
-        max_output_tokens=max_output_tokens,
-        response_mime_type="application/json",
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-    )
-    response = client.models.generate_content(
-        model=GEMINI_MODEL, contents=prompt, config=config
-    )
-    return response.text.strip()
+def _get_judge_client():
+    global _judge_client
+    with _judge_client_lock:
+        if _judge_client is None:
+            _judge_client = from_environment()
+        return _judge_client
 
 
 def _score_one(features: dict, active_rubrics: list[dict]) -> tuple[dict[str, int], str | None]:
     """
-    Score all applicable rubrics for one trajectory in a single Gemini call.
+    Score all applicable rubrics for one trajectory in a single GPT-6-Luna call.
 
     Returns:
         (scores, debug_str) where scores is {rubric_id: score} (-1 = N/A)
@@ -211,42 +192,8 @@ def _score_one(features: dict, active_rubrics: list[dict]) -> tuple[dict[str, in
     # Debug calls need more tokens for reasoning text; normal calls are tiny.
     max_tokens = 512
 
-    raw = "(call failed)"
-    max_attempts = 3
-    for attempt in range(1, max_attempts + 1):
-        try:
-            raw    = _call_gemini(prompt, max_output_tokens=max_tokens)
-            raw    = re.sub(r"^```json\s*", "", raw)
-            raw    = re.sub(r"\s*```$",     "", raw)
-            parsed = json.loads(raw)
-            for rubric in to_score:
-                rid   = rubric["id"]
-                entry = parsed.get(rid)
-                try:
-                    # Support both flat {"R1": 1} and nested {"R1": {"score": 1}} formats.
-                    score = int(entry) if not isinstance(entry, dict) else int(entry["score"])
-                except (KeyError, TypeError, ValueError):
-                    score = -1
-                result[rid] = score
-            break
-        except Exception as e:
-            if attempt < max_attempts:
-                sleep_s = min(2 ** (attempt - 1), 4) + random.random()
-                print(
-                    f"[rubrics_judge] Gemini call failed on attempt "
-                    f"{attempt}/{max_attempts}: {e}; retrying in {sleep_s:.1f}s",
-                    flush=True,
-                )
-                time.sleep(sleep_s)
-                continue
-
-            print(f"[rubrics_judge] Gemini call failed after {max_attempts} attempts: {e}", flush=True)
-            for rubric in to_score:
-                result[rubric["id"]] = -1
-
-    if not all(r["id"] in result for r in to_score):
-        for rubric in to_score:
-            result.setdefault(rubric["id"], -1)
+    scores = _get_judge_client().score(prompt,to_score,max_tokens=max_tokens)
+    result.update(scores)
 
     return result, None
 
@@ -256,9 +203,9 @@ def score_trajectory(
     rubrics: Optional[list[dict]] = None,
 ) -> tuple[dict[str, int], str | None]:
     """
-    Step 1 of two-phase process reward: score one trajectory via a Gemini call.
+    Step 1 of two-phase process reward: score one trajectory via a GPT-6-Luna call.
 
-    Slow (one Gemini API call).  Call as soon as a trajectory's episode ends
+    Slow (one judge API call).  Call as soon as a trajectory's episode ends
     (done=True) so that scoring overlaps with the ongoing rollout of other
     trajectories.
 
