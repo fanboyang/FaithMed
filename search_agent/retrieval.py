@@ -108,56 +108,52 @@ def query_clueweb(query, num_docs=3):
                 raise e
             
 def query_medcorp(query, num_docs=3):
-    """
-    Args:
-        - query, the query to search
-        - num_docs, the number of documents to return
-    Returns:
-        - returned_cleaned_text: a list of cleaned text strings
-    """
-    start_time = time.time()
-    num_docs = str(num_docs)
-    ## Remember to change the URL to your own retrieval server!
-    URL = "https://medrag.your-host.com"
-    request_url = f"{URL}/search?query={query}&k={num_docs}"
-
+    """Query the explicitly configured MedCorp service; protocol failures are fatal."""
+    from urllib.parse import urlsplit
+    url=os.environ.get('FAITHMED_MEDCORP_URL','').rstrip('/')
+    parsed=urlsplit(url)
+    if (parsed.scheme not in ('http','https') or not parsed.netloc or parsed.username
+        or parsed.password or parsed.query or parsed.fragment
+        or any(marker in url.lower() for marker in ('your-host','placeholder','.example'))):
+        raise ValueError('FAITHMED_MEDCORP_URL must be a real credential-free retrieval base URL')
+    if not isinstance(query,str) or not query.strip() or type(num_docs) is not int or num_docs < 1:
+        raise ValueError('nonempty query and positive integer document count are required')
+    start_time=time.time()
     for attempt in range(MAX_RETRIES):
         try:
-            response = requests.get(request_url, timeout=30)
+            response=requests.get(url+'/search',params={'query':query,'k':num_docs},timeout=30)
             response.raise_for_status()
-
-            json_data = response.json()
-            results = json_data.get("results", [])
-            return_cleaned_text = []
-
-            for returned_document in results:
-                decoded_result = base64.b64decode(returned_document).decode("utf-8")
-                parsed_result = json.loads(decoded_result)
-
-                text = parsed_result["Clean-Text"]
-                title = parsed_result.get("title", "").strip()
-                data_source = parsed_result.get("data_source", "").strip()
-                # For non-pubmed sources, title is prepended to Clean-Text during embedding,
-                # so strip it from the front to avoid duplication in display.
-                if data_source.lower() != "pubmed" and text.startswith(title):
-                    text = text[len(title):].lstrip(". ")
-                return_cleaned_text.append(f"Title: {title} | Data Source: {data_source}\n{text}".strip())
-
-            end_time = time.time()
-            with open(medcorp_time_log, "a") as f:
-                f.write(f"query time:{end_time - start_time}\n")
-
-            return return_cleaned_text
-
-        except Exception as e:
-            with open(medcorp_error_log, "a") as f:
-                f.write(f"Medcorp Attempt {attempt + 1}/{MAX_RETRIES} failed, query: {query}, error: {e}\n")
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(random.uniform(0.5, 2))
-            else:
-                with open(medcorp_error_log, "a") as f:
-                    f.write(f"All {MAX_RETRIES} Medcorp attempts failed. Final error: {e}\n")
-                raise e
+        except requests.exceptions.RequestException as exc:
+            status=getattr(getattr(exc,'response',None),'status_code',None)
+            transient=status is None or status==429 or 500 <= status < 600
+            if not transient or attempt==MAX_RETRIES-1:
+                raise
+            time.sleep(random.uniform(.5,2))
+            continue
+        # Parsing is outside the network retry block. Missing fields are not empty results.
+        body=response.json()
+        if not isinstance(body,dict) or not isinstance(body.get('results'),list):
+            raise ValueError('MedCorp response must contain a results list')
+        documents=[]
+        for encoded in body['results']:
+            if not isinstance(encoded,str):
+                raise ValueError('MedCorp result must be a base64 string')
+            document=json.loads(base64.b64decode(encoded,validate=True).decode('utf-8'))
+            if not isinstance(document,dict) or not isinstance(document.get('Clean-Text'),str):
+                raise ValueError('MedCorp document is missing Clean-Text')
+            title=document.get('title','')
+            data_source=document.get('data_source','')
+            if not isinstance(title,str) or not isinstance(data_source,str):
+                raise ValueError('MedCorp document metadata must be strings')
+            title=title.strip();data_source=data_source.strip()
+            text=document['Clean-Text']
+            if data_source.lower()!='pubmed' and title and text.startswith(title):
+                text=text[len(title):].lstrip('. ')
+            documents.append(f'Title: {title} | Data Source: {data_source}\n{text}'.strip())
+        with open(medcorp_time_log,'a') as handle:
+            handle.write(f'query time:{time.time()-start_time}\n')
+        return documents
+    raise RuntimeError('unreachable MedCorp retry state')
 
 
 def query_fineweb(query, num_docs=3):

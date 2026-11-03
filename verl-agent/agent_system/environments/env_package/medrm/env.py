@@ -367,6 +367,8 @@ class MedRMEnv:
                 else:
                     raise ValueError(f"Unknown search engine: {self.search_engine}")
         except Exception as e:
+            if self.search_engine == "medcorp":
+                raise RuntimeError("MedCorp retrieval failed; stopping this rollout") from e
             return f"Search error: {e}"
 
         blocks = []

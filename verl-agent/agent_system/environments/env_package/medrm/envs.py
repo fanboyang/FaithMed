@@ -194,14 +194,13 @@ class MedRMMultiProcessEnv(gym.Env):
             if future is not None:
                 try:
                     scores, debug_str = future.result()
+                    if any(r["id"] not in scores for r in rubrics):
+                        raise ValueError("judge omitted a required rubric score")
                     raw_scores.append(scores)
                     if debug_str is not None:
                         print(debug_str, flush=True)
                 except Exception as exc:
-                    print(f"[MedRMMultiProcessEnv] rubric scoring failed for "
-                          f"worker {i}: {exc}")
-                    scores = {r["id"]: -1 for r in rubrics}
-                    raw_scores.append(scores)
+                    raise RuntimeError(f"Rubric judge failed for worker {i}; no replacement reward") from exc
             else:
                 scores = {r["id"]: -1 for r in rubrics}
                 raw_scores.append(scores)
@@ -261,14 +260,15 @@ class MedRMMultiProcessEnv(gym.Env):
                 return dict(fallback)
             try:
                 scores, debug_str = future.result()
+                if any(r["id"] not in scores for r in scoring_rubrics):
+                    raise ValueError("judge omitted a required rubric score")
                 if debug_str:
                     print(debug_str, flush=True)
                 expanded_scores = dict(fallback)
                 expanded_scores.update(scores)
                 return expanded_scores
             except Exception as exc:
-                print(f"[MedRMMultiProcessEnv] {label}: {exc}")
-                return dict(fallback)
+                raise RuntimeError(f"Rubric judge failed ({label}); no replacement reward") from exc
 
         result: list[list[float]] = []
         raw_scores_list: list[dict] = []
