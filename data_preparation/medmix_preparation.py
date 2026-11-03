@@ -435,6 +435,23 @@ def load_source(spec, cache_dir=None):
     return datasets.load_dataset(spec["name"], name=spec["config"], revision=spec["revision"], cache_dir=cache_dir)
 
 
+def add_env_kwargs(row):
+    """仅补齐MedRM真实reset接口；保留所有原列、原问题uid及数据协议。"""
+    extra = row["extra_info"]
+    if not isinstance(extra, dict):
+        raise ValueError("extra_info must be an object")
+    environment = {
+        "question": require_text(extra.get("question"), "extra_info.question"),
+        "question_id": require_text(extra.get("uid"), "extra_info.uid"),
+        "ground_truth": require_text(row["reward_model"].get("ground_truth"), "ground_truth"),
+        "data_source": require_text(row.get("data_source"), "data_source"),
+        "extra_info": dict(extra),
+    }
+    if "env_kwargs" in row and row["env_kwargs"] != environment:
+        raise ValueError("existing env_kwargs contradicts original metadata")
+    return {**row, "env_kwargs": environment}
+
+
 def map_validated_row(spec, row, index, source_split, target_split):
     name = spec["name"]
     try:
@@ -482,7 +499,7 @@ def map_validated_row(spec, row, index, source_split, target_split):
             raise ValueError("qid is missing")
         result["extra_info"]["source_split"] = source_split
         result["extra_info"]["uid"] = f"{name}:{source_split}:{index}"
-        return result
+        return add_env_kwargs(result)
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError(f"{name}/{source_split} row {index}: {error}") from error
 

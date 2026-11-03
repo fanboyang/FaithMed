@@ -57,11 +57,11 @@ class RetrievalProtocolTests(unittest.TestCase):
 class LauncherTests(unittest.TestCase):
     def fake_root(self,directory):
         root=Path(directory)
-        for folder in ['private','env/bin','models/Qwen3-1.7B','data/medmix','stubs']:
+        for folder in ['private','env/bin','models/Qwen3-1.7B','data/medmix_rl','stubs']:
             (root/folder).mkdir(parents=True,exist_ok=True)
         (root/'code').symlink_to(ROOT,target_is_directory=True)
         (root/'models/Qwen3-1.7B/config.json').write_text('{"model_type":"qwen3"}')
-        for name in ['train','test']:(root/f'data/medmix/{name}.parquet').write_text('fixture')
+        for name in ['train','test']:(root/f'data/medmix_rl/{name}.parquet').write_text('fixture')
         (root/'private/judge.env').write_text("ZC_BASE_URL=https://api.zcloudapi.com/v1\nZC_GPT_API_KEY=test-private-credential\n")
         (root/'env/bin/activate').write_text('export PATH='+shlex.quote(str(root/'stubs'))+':"$PATH"\n')
         python=root/'stubs/python'
@@ -108,7 +108,7 @@ class LauncherTests(unittest.TestCase):
         for expected in ['CUDA_VISIBLE_DEVICES=0,1,2,3','trainer.total_training_steps=300',
                          'trainer.val_before_train=False','trainer.test_freq=300',
                          'env.gemini_model=gpt-6-luna','env.process_reward_enable=1',
-                         'env.step_scoring=True','FAITHMED_MEDCORP_URL','ZC_GPT_API_KEY']:
+                         'env.step_scoring=True','actor_rollout_ref.rollout.max_num_batched_tokens=16384','FAITHMED_MEDCORP_URL','ZC_GPT_API_KEY']:
             self.assertIn(expected,script)
         self.assertNotIn('set -x',script)
         self.assertNotIn("'console','wandb'",script)

@@ -16,7 +16,7 @@ root=Path(sys.argv[1]); out=root/'data/integration-smoke-v1'
 if out.exists():raise FileExistsError('smoke data already exists; inspect prior run before continuing')
 with urllib.request.urlopen('http://127.0.0.1:18601/health',timeout=15) as response: health=json.load(response)
 assert health['scope']=='integration_smoke_subset_exact_search' and len(health['sources'])==5
-rows=pq.read_table(root/'data/medmix/train.parquet')
+rows=pq.read_table(root/'data/medmix_rl/train.parquet')
 sources=rows.column('data_source').to_pylist(); counts={}; selected=[]
 for i,source in enumerate(sources):
     if counts.get(source,0)<2:selected.append(i);counts[source]=counts.get(source,0)+1

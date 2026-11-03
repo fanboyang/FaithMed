@@ -50,7 +50,7 @@ model=root/'models/Qwen3-1.7B'
 with (model/'config.json').open() as handle: config=json.load(handle)
 if config.get('model_type')!='qwen3':raise ValueError('student must be Qwen3-1.7B')
 for split in ('train','test'):
-    if not (root/'data/medmix'/f'{split}.parquet').is_file():raise FileNotFoundError(split+' parquet missing')
+    if not (root/'data/medmix_rl'/f'{split}.parquet').is_file():raise FileNotFoundError(split+' parquet missing')
 if sys.argv[2]!='true':
     rows=subprocess.check_output(['nvidia-smi','--query-gpu=index,uuid,memory.used','--format=csv,noheader,nounits'],text=True)
     gpu={int(fields[0]):(fields[1].strip(),int(fields[2])) for line in rows.splitlines() if (fields:=line.split(','))}
@@ -82,7 +82,7 @@ TEMPERATURE=1.0
 LOG_PROB_MICRO_BATCH_SIZE=128
 ROLLOUT_N=8
 KL_COEF=0.001
-DATASET_NAME=medmix
+DATASET_NAME=medmix_rl
 ROLLOUT_GPU_MEMORY_UTIL=0.8
 LOG_VAL_GENERATIONS=3
 SAVE_FREQ=300
@@ -158,6 +158,7 @@ python -m verl.trainer.main_ppo \
   actor_rollout_ref.rollout.name=vllm \
   actor_rollout_ref.rollout.gpu_memory_utilization=$ROLLOUT_GPU_MEMORY_UTIL \
   actor_rollout_ref.rollout.enable_chunked_prefill=False \
+  actor_rollout_ref.rollout.max_num_batched_tokens=16384 \
   actor_rollout_ref.rollout.enforce_eager=True  \
   actor_rollout_ref.rollout.free_cache_engine=True \
   actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=$LOG_PROB_MICRO_BATCH_SIZE \
