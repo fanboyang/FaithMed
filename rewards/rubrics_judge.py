@@ -26,7 +26,7 @@ from reproduction.judge_client import from_environment
 JUDGE_MODEL = "gpt-6-luna"
 MAX_WORKERS     = 8     # max concurrent judge calls
 LAMBDA_DEFAULT  = 0.05
-_RUBRICS_FILE   = Path(__file__).parent.parent / "rubric-refining" / "rubrics.yaml"
+_RUBRICS_FILE   = Path(__file__).parent.parent / "rubric-refining" / "rubrics_step.yaml"
 _rubrics_cache: list[dict] | None = None
 
 # Debug: print judge input/output for the first N trajectories scored.
@@ -51,7 +51,7 @@ _debug_centering_done = False  # print group centering only once
 
 
 def load_active_rubrics() -> list[dict]:
-    """Load active rubrics from rubrics.yaml, cached after the first call."""
+    """Load the paper Table 6/7 fifteen binary rubrics shared with step scoring."""
     global _rubrics_cache
     if _rubrics_cache is None:
         data = yaml.safe_load(_RUBRICS_FILE.read_text())
@@ -59,6 +59,8 @@ def load_active_rubrics() -> list[dict]:
             r for r in data["rubrics"]
             if r.get("active", True) and not r.get("needs_redefinition", False)
         ]
+        if len(_rubrics_cache) != 15 or any(r.get("type") != "binary" for r in _rubrics_cache):
+            raise ValueError("FaithMed paper protocol requires exactly fifteen binary rubrics")
     return _rubrics_cache
 
 def extract_features(memory_context: list[str]) -> dict:

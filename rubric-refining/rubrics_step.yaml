@@ -1,0 +1,311 @@
+source:
+  title: 'FaithMed: Training LLMs for Faithful Evidence-Based Medical Reasoning'
+  pdf: ../../FaithMed_EMNLP_2026.pdf
+  tables:
+  - 6
+  - 7
+  pdf_pages:
+  - 13
+  - 14
+  transcription: Description and Binary condition cells copied from the paper; PDF line breaks collapsed only.
+  ids: Local stable row identifiers A1-E3; the paper tables do not assign IDs.
+  applicability: Step applicability remains the author code dimension-based rules; no new rubric preconditions introduced.
+rubrics:
+- id: A1
+  dimension: 1
+  name: Question clarity
+  description: 'Does the model contain an explicit sentence restating or paraphrasing the core clinical question,
+    identifying the condition, mechanism, or scenario at issue?
+
+    MET: The <think> block contains a sentence such as “The key is to choose the correct sequence of management
+    for this genital trauma case” or “For this stroke patient on heparin, the task is to determine the cause of
+    the new respiratory decline.” UNMET: No concrete restatement appears, or the model only says vague phrases like
+    “the key point is the diagnosis” without naming the requested target. <think>'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: A2
+  dimension: 1
+  name: Salient patient-feature extraction
+  description: 'Does the model identify the small set of stem features that drive the answer, rather than merely
+    restating many details?
+
+    MET: The <think> block marks one or more features as decisive because they change the diagnosis, mechanism,
+    calculation, management step, or option choice, e.g., “ptosis + miosis + normal extraocular movements are the
+    key clues for Horner syndrome”; “catalase-positive, coagulase-positive organism is the decisive clue for Staphylococcus
+    aureus and CGD”; “positive pregnancy test plus LLQ pain/hypotension makes ectopic pregnancy the key concern”;
+    or “height 162.1 cm and weight 71.4 kg are the only values needed for BMI.” UNMET: The model only paraphrases
+    the stem, lists non-decisive details, or does not identify which features are answer-driving.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: A3
+  dimension: 1
+  name: Question specificity
+  description: 'Is the clinical problem narrowed to a specific question before searching or answering, rather than
+    left as a vague topic area?
+
+    MET: The <think> block contains a precise, answerable question before <search> that directly maps to the decision
+    required, e.g., “I need to confirm whether diastolic RV collapse is specific to tamponade vs. constrictive pericarditis.”
+    UNMET: The model only states the broad task type without naming the decision boundary, such as “answer a thyroid
+    nodule question” or “calculate creatinine clearance.”'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: B1
+  dimension: 2
+  name: Search Motivation and Alignment
+  description: 'Does the model explicitly identify a clinically relevant knowledge gap, unresolved uncertainty,
+    or claim that genuinely needs verification, and does its search directly target that gap?
+
+    MET: Immediately before <search>, the model names one specific unresolved decision-critical gap, such as a diagnostic
+    discriminator, legal/ethical rule, dosing formula, threshold, or comparison between answer options, and the
+    query explicitly contains the terms needed to resolve that exact gap. A high-level topic query is not enough:
+    the query should encode the actual decision boundary named in <think>, not just the domain. UNMET: The model
+    has already mostly committed to an answer and the search is only decorative confirmation, or it searches for
+    information it already states with confidence and does not explain why verification is still necessary.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: B2
+  dimension: 2
+  name: Gap-directed search progression
+  description: 'This rubric requires at least one prior retrieval to assess progress. Compared to information retrieved
+    in prior turns, does the current search make progress toward resolving the outstanding evidence need, rather
+    than repeating resolved topics or drifting to unrelated areas?
+
+    MET: The <think> block names what the previous results did not resolve and searches more specifically, e.g.,
+    “The first search returned general thyroid malignancy features, but I need the official ACR scoring categories”
+    or “The results mention treatment but not renal-failure dosing, so I should search dosing in renal impairment.”
+    UNMET: No explicit gap-directed search progression pattern appears.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: B3
+  dimension: 2
+  name: Query constraint preservation
+  description: 'Does the search query preserve the answer-critical constraints from the question stem, such as patient
+    subgroup, timing, comparator, option term, disease subtype, formula variable, or requested source standard?
+
+    MET: The query includes the key constraint that would change the answer if omitted, e.g., “complications of
+    meningococcal meningitis in children” or “tetanus prophylaxis in patients taking glucocorticoids.” UNMET: No
+    explicit query-constraint-preservation pattern appears.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 6
+    pdf_page: 13
+- id: C1
+  dimension: 3
+  name: Evidence-faithful synthesis
+  description: 'Do the clinical claims attributed to specific [Tn-Rn] passages accurately reflect the content of
+    those passages, with the correct logical direction and without inferential jumps not shown in <think>?
+
+    MET: Every claim that cites a [Tn-Rn] passage (a) can be verified by reading that passage, (b) preserves the
+    direction of the cited relationship, such as causality, magnitude, or association, and (c) requires no unstated
+    inferential step between the passage text and the attributed claim. UNMET: At least one [Tn-Rn] citation violates
+    any of these conditions: the passage does not support the attributed claim, the direction of the cited relationship
+    is reversed or distorted, or the attributed claim requires an inferential step not shown in <think>. <think>'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: C2
+  dimension: 3
+  name: Evidence conflict recognition
+  description: 'When the model notices inconsistent or qualifying retrieved information, does it explicitly name
+    the discrepancy?
+
+    MET: The <think> block contains a clear conflict-recognition pattern comparing retrieved passages, e.g., “[T1-R2]
+    says two tetanus doses during pregnancy, while [T1-R3] says complete a three-dose primary series; the guidance
+    differs.” UNMET: The conflict is invisible in the reasoning.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: C3
+  dimension: 3
+  name: Evidence sufficiency judgment
+  description: 'When the retrieved [Tn-Rn] passages do not directly address the clinical concept targeted by the
+    preceding <search>, does <think> explicitly state this insufficiency before proceeding to draw conclusions?
+
+    MET: The <think> block contains a sentence such as “the retrieved passages do not directly confirm polonium’s
+    reactivity with HCl,” “no passage specifically addressed dosing in renal failure” before reasoning forward from
+    indirect evidence, or “The retrieved passages do not directly address renal dosing, so the answer remains tentative.”
+    UNMET: The <think> block does not contain any explicit statement acknowledging that the retrieved passages fail
+    to directly address the search target.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: D1
+  dimension: 4
+  name: Setting applicability
+  description: 'Does the model explicitly assess whether at least one key [Tn-Rn] passage applies to the specific
+    patient or scenario described in the question stem, by comparing the passage’s population or context to the
+    patient’s features?
+
+    MET: The <think> or <answer> block contains an explicit applicability statement, e.g., “T2-R1 reports echocardiographic
+    findings in ICU patients with effusion, which matches the ED presentation in this case,” “T1-R3 is about neonates
+    born to infected mothers, directly applicable here,” or “The CGD evidence applies because the patient has recurrent
+    catalase-positive infections.” UNMET: No explicit applicability pattern appears.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: D2
+  dimension: 4
+  name: Evidence-based exclusion of alternatives
+  description: 'Does the model ground its option exclusion reasoning in [Tn-Rn] citations in <think>, rather than
+    dismissing options by parametric assertion alone?
+
+    MET: Option elimination in <think> is explicitly tied to a [Tn-Rn] citation, e.g., “[T1-R2] confirms pericardial
+    thickening is the hallmark of constrictive pericarditis, ruling out option B in this patient whose echo shows
+    no thickening” or “[T1-R6] lists margin, echogenicity, and shape as ACR features, leaving vascularity as the
+    exception.” UNMET: Option elimination in <think> relies on bare assertion with no [Tn-Rn] citation.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: D3
+  dimension: 4
+  name: Evidence Substantiation and Prioritization
+  description: 'Does the model explicitly prioritize the most direct or authoritative retrieved evidence when supporting
+    the answer?
+
+    MET: The reasoning uses retrieved evidence as the main basis for the answer and names why the chosen evidence
+    is more direct, authoritative, or answer-relevant than alternatives, e.g., “The official ACR TI-RADS feature
+    list is more directly relevant than a general malignancy-feature review, so I will use [T1-R6]”; “CDC guideline
+    language should outweigh a broad background article for vaccination scheduling”; or “[T1-R1] and [T1-R5] directly
+    address radiolucency of uric acid stones, while composition-only passages are less useful for this question.”
+    UNMET: No explicit evidence-prioritization or authority-evaluation pattern appears.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: E1
+  dimension: 5
+  name: Uncertainty calibration
+  description: 'Does the model explicitly acknowledge limitations in the retrieved information or express appropriate
+    uncertainty before drawing a conclusion?
+
+    MET: At least one explicit hedge appears in <think> or <answer> whenever the evidentiary basis is weak, e.g.,
+    “the retrieved passages do not confirm X; based on clinical reasoning I tentatively conclude Y,” or “limited
+    data support this – evidence suggests...” in <answer> when the trajectory contained only peripheral [Tn-Rn]
+    passages. UNMET: No explicit uncertainty/calibration pattern appears. <think>'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: E2
+  dimension: 5
+  name: Premature closure self-check
+  description: 'Does the model avoid locking onto an early answer by explicitly checking and revising a plausible
+    but wrong hypothesis before committing?
+
+    MET: The <think> block contains a visible self-correction pattern: it names an initial candidate or tempting
+    interpretation, identifies the specific stem clue or retrieved evidence that weakens it, and shifts to the better-supported
+    answer, e.g., “I initially thought this was tension pneumothorax because of tracheal deviation, but the percussion
+    is dull rather than hyperresonant, so that hypothesis fails and hemothorax is the answer” or “I was leaning
+    toward opioid intoxication, but opioid toxicity should cause miosis and respiratory depression, whereas this
+    stem has dry mucous membranes, agitation, hypertension, and mydriasis, so I should switch to anticholinergic
+    toxicity.” UNMET: No explicit hypothesis-checking or self-correction pattern appears before the final answer.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14
+- id: E3
+  dimension: 5
+  name: Tradeoff communication
+  description: 'Does <think> or <answer> explicitly name at least one relevant tradeoff, such as benefit–harm, efficacy–tolerability,
+    or convenience–monitoring burden?
+
+    MET: The <think> or <answer> block discusses at least one tradeoff relevant to the recommendation, e.g., “[T1-R4]
+    reports ATA has higher sensitivity for thyroid nodule biopsy decisions, while [T1-R5] reports ACR TI-RADS has
+    higher specificity and fewer unnecessary FNAs; this is a sensitivity-specificity tradeoff rather than a single
+    uniform recommendation” or “[T1-R6] shows TXA is more effective than packing in antiplatelet users, but IV administration
+    adds procedural burden compared to topical oxymetazoline.” UNMET: No explicit tradeoff-communication pattern
+    appears.'
+  type: binary
+  precondition: null
+  scale_labels:
+  - UNMET
+  - MET
+  active: true
+  source:
+    table: 7
+    pdf_page: 14

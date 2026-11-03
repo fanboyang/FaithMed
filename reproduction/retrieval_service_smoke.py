@@ -52,10 +52,10 @@ def main():
     torch.set_num_threads(args.threads)
     documents=[json.loads(line) for line in args.corpus.read_text().splitlines()]
     sources={d['data_source'].lower() for d in documents}
-    if len(sources)!=5 or not 6<=len(documents)<=100:
+    if sources!={'pubmed','textbooks','wikipedia','guidelines','statpearls'} or not 6<=len(documents)<=100:
         raise ValueError('smoke corpus must contain five sources and 6-100 documents')
     for d in documents:
-        if any(not isinstance(d.get(key),str) or not d[key].strip() for key in ('id','title','content','data_source','source_url')):
+        if any(not isinstance(d.get(key),str) or (key!='title' and not d[key].strip()) for key in ('id','title','content','data_source','source_url')):
             raise ValueError('incomplete document metadata')
     tokenizer=AutoTokenizer.from_pretrained(args.model,trust_remote_code=True,local_files_only=True)
     model=AutoModel.from_pretrained(args.model,trust_remote_code=True,local_files_only=True,

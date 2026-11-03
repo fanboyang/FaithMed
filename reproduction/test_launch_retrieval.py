@@ -90,6 +90,19 @@ class LauncherTests(unittest.TestCase):
             self.assertIn('occupied',failed.stderr)
             self.assertFalse(Path(env['CAPTURE_ARGS']).exists())
 
+    def test_explicit_single_gpu_smoke_keeps_core_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env=self.fake_root(directory)
+            gpu=Path(directory)/'stubs/nvidia-smi'
+            gpu.write_text('#!/bin/bash\nif [[ "$1" == --query-gpu=* ]]; then echo "4, GPU-4, 0"; fi\n')
+            env['FAITHMED_SMOKE_GPU']='4'
+            completed=subprocess.run(['bash',str(ROOT/'reproduction/train.sh')],env=env,capture_output=True,text=True)
+            self.assertEqual(completed.returncode,0,completed.stderr)
+            args=Path(env['CAPTURE_ARGS']).read_text()
+            self.assertIn('trainer.n_gpus_per_node=1',args)
+            self.assertIn('actor_rollout_ref.rollout.tensor_model_parallel_size=1',args)
+            self.assertIn('actor_rollout_ref.actor.ulysses_sequence_parallel_size=1',args)
+
     def test_core_config_and_safe_launch(self):
         script=(ROOT/'reproduction/train.sh').read_text()
         for expected in ['CUDA_VISIBLE_DEVICES=0,1,2,3','trainer.total_training_steps=300',

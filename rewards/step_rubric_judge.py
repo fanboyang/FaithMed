@@ -35,6 +35,8 @@ def load_step_rubrics() -> list[dict]:
             r for r in data["rubrics"]
             if r.get("active", True) and not r.get("needs_redefinition", False)
         ]
+        if len(_step_rubrics_cache) != 15 or any(r.get("type") != "binary" for r in _step_rubrics_cache):
+            raise ValueError("FaithMed paper protocol requires exactly fifteen binary rubrics")
     return _step_rubrics_cache
 
 

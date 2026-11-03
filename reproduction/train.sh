@@ -15,6 +15,10 @@ case "${ZC_BASE_URL%/}" in
 esac
 source "$root/env/bin/activate"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
+if [[ -n "${FAITHMED_SMOKE_GPU:-}" ]]; then
+  [[ "$FAITHMED_SMOKE_GPU" == 4 ]] || { echo 'Only GPU4 is allocated to the bounded single-GPU smoke' >&2; exit 2; }
+  export CUDA_VISIBLE_DEVICES=4
+fi
 export WANDB_MODE=disabled TOKENIZERS_PARALLELISM=false HYDRA_FULL_ERROR=1
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export FAITHMED_MEDCORP_URL
@@ -50,11 +54,12 @@ for split in ('train','test'):
 if sys.argv[2]!='true':
     rows=subprocess.check_output(['nvidia-smi','--query-gpu=index,uuid,memory.used','--format=csv,noheader,nounits'],text=True)
     gpu={int(fields[0]):(fields[1].strip(),int(fields[2])) for line in rows.splitlines() if (fields:=line.split(','))}
-    if not all(index in gpu for index in range(4)):raise RuntimeError('GPUs 0-3 are required')
-    busy=[index for index in range(4) if gpu[index][1]>1024]
+    requested=[int(x) for x in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
+    if not all(index in gpu for index in requested):raise RuntimeError('Requested GPUs are missing')
+    busy=[index for index in requested if gpu[index][1]>1024]
     apps=subprocess.check_output(['nvidia-smi','--query-compute-apps=gpu_uuid,pid','--format=csv,noheader,nounits'],text=True)
     active={line.split(',')[0].strip() for line in apps.splitlines() if line.strip()}
-    busy+= [index for index in range(4) if gpu[index][0] in active]
+    busy+= [index for index in requested if gpu[index][0] in active]
     if busy:raise RuntimeError('Requested GPUs are occupied: '+str(sorted(set(busy))))
 PREFLIGHT
 cd "$root/code/verl-agent"
@@ -67,6 +72,8 @@ MAX_RESPONSE_LENGTH=3072
 LEARNING_RATE=1e-6
 PPO_MINI_BATCH_SIZE=128
 N_GPUS_PER_NODE=4
+SEQUENCE_PARALLEL_SIZE=2
+[[ -z "${FAITHMED_SMOKE_GPU:-}" ]] || { N_GPUS_PER_NODE=1; SEQUENCE_PARALLEL_SIZE=1; }
 CLIP_RATIO=0.2
 KL_LOSS_COEF=0.001
 ENTROPY_COEFFIENT=0.001
@@ -81,6 +88,7 @@ LOG_VAL_GENERATIONS=3
 SAVE_FREQ=300
 REMOVE_CLIP=False
 ROLLOUT_TENSOR_MODEL_PARALLEL_SIZE=2
+[[ -z "${FAITHMED_SMOKE_GPU:-}" ]] || ROLLOUT_TENSOR_MODEL_PARALLEL_SIZE=1
 ENV_MAX_STEPS=4
 NUM_CPUS_PER_ENV_WORKER=0.125
 SEARCH_ENGINE=medcorp
@@ -143,7 +151,7 @@ python -m verl.trainer.main_ppo \
   actor_rollout_ref.model.enable_activation_offload=True \
   actor_rollout_ref.actor.fsdp_config.param_offload=False \
   actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-  actor_rollout_ref.actor.ulysses_sequence_parallel_size=2 \
+  actor_rollout_ref.actor.ulysses_sequence_parallel_size=$SEQUENCE_PARALLEL_SIZE \
   actor_rollout_ref.rollout.temperature=$TEMPERATURE \
   actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=$LOG_PROB_MICRO_BATCH_SIZE \
   actor_rollout_ref.rollout.tensor_model_parallel_size=$ROLLOUT_TENSOR_MODEL_PARALLEL_SIZE \

@@ -3,6 +3,7 @@
 set +x
 set -euo pipefail
 root=${FAITHMED_ROOT:-/data/fby/faithmed}
+export FAITHMED_SMOKE_GPU=4
 export FAITHMED_RUN_NAME=faithmed-integration-smoke-v1
 export FAITHMED_MEDCORP_URL=http://127.0.0.1:18601
 source "$root/env/bin/activate"
