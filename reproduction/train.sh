@@ -26,7 +26,7 @@ run_name=${FAITHMED_RUN_NAME:-faithmed-qwen3-1.7b-gpt6luna}
 output="$root/outputs/$run_name"
 export FAITHMED_JUDGE_AUDIT_DIR="$output/judge"
 export TMPDIR="$root/tmp/$run_name"
-export RAY_TMPDIR="$TMPDIR/ray"
+export RAY_TMPDIR="$root/tmp/ray"
 mkdir -p "$output" "$RAY_TMPDIR" "$FAITHMED_JUDGE_AUDIT_DIR"
 export PYTHONPATH="$root/code:$root/code/verl-agent${PYTHONPATH:+:$PYTHONPATH}"
 export NCCL_DEBUG=WARN RAY_DEDUP_LOGS=1
