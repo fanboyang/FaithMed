@@ -6,6 +6,7 @@ unrelated projects and the CPU retrieval service are never selected.
 import fcntl
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import signal
@@ -13,7 +14,7 @@ import uuid
 import time
 import psutil
 
-RUN_NAME='faithmed-integration-smoke-v1'
+RUN_PREFIX='faithmed-integration-smoke-'
 
 
 def cleanup_run(run_name):
@@ -39,12 +40,15 @@ def cleanup_run(run_name):
 
 def main():
     root=Path(os.environ.get('FAITHMED_ROOT','/data/fby/faithmed'))
+    smoke_id=os.environ.get('FAITHMED_SMOKE_ID','v1')
+    if not re.fullmatch(r'v[1-9][0-9]*',smoke_id):raise ValueError('invalid smoke version')
+    run_name=RUN_PREFIX+smoke_id
     logdir=root/'logs';logdir.mkdir(exist_ok=True)
     with (logdir/'smoke.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         started=time.time()
-        owner=RUN_NAME+':'+str(uuid.uuid4())
-        env={**os.environ,'FAITHMED_RUN_NAME':RUN_NAME,'FAITHMED_SMOKE_OWNER':owner}
+        owner=run_name+':'+str(uuid.uuid4())
+        env={**os.environ,'FAITHMED_RUN_NAME':run_name,'FAITHMED_SMOKE_OWNER':owner}
         def interrupted(signum,frame):raise SystemExit(128+signum)
         signal.signal(signal.SIGTERM,interrupted)
         signal.signal(signal.SIGINT,interrupted)
@@ -65,7 +69,7 @@ def main():
                 cleanup_error=type(exc).__name__
                 raise
             finally:
-                (logdir/'smoke-bounded-status.json').write_text(json.dumps({'scope':'integration_smoke_not_benchmark','run_name':RUN_NAME,'owner':owner,'returncode':code,'elapsed_seconds':time.time()-started,'budget_seconds':1800,'cleaned_tagged_pids':cleaned,'cleanup_error':cleanup_error},indent=2))
+                (logdir/('smoke-bounded-status-'+smoke_id+'.json')).write_text(json.dumps({'scope':'integration_smoke_not_benchmark','run_name':run_name,'owner':owner,'returncode':code,'elapsed_seconds':time.time()-started,'budget_seconds':1800,'cleaned_tagged_pids':cleaned,'cleanup_error':cleanup_error},indent=2))
         raise SystemExit(code)
 
 if __name__=='__main__':main()

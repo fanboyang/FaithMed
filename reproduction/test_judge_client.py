@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 from io import BytesIO
-from reproduction.judge_client import JudgeClient, JudgeResponseError, JudgeTransportError, JudgeInFlightError
+from reproduction.judge_client import JudgeClient, JudgeResponseError, JudgeTransportError, JudgeInFlightError, parse_scores
 
 RUBRICS=[{'id':'R1','type':'binary'},{'id':'R2','type':'ordinal3'}]
 def raw(content='{"R1":1,"R2":{"score":2}}'):
@@ -86,6 +86,42 @@ class JudgeTests(unittest.TestCase):
                 release.set()
                 self.assertEqual(first.result(timeout=3),second.result(timeout=3))
             self.assertEqual(request.call_count,1)
+
+    def test_exact_escape_wrapper_decodes_without_modifying_scores(self):
+        content='<escape>{"R1":0,"R2":{"score":2}}</escape>'
+        self.assertEqual(parse_scores(raw(content),RUBRICS),{'R1':0,'R2':2})
+        for malformed in ['prefix '+content,content+' suffix','<escape>{"R1":0}</escape>',
+                          '<escape>{"R1":3,"R2":2}</escape>',
+                          '<escape>```json\n{"R1":0,"R2":2}\n```</escape>', '<escape>{"R1":0,"R2":2}',
+                          '<escape>{\\"R1\\":0,\\"R2\\":2}</escape>']:
+            with self.subTest(malformed=malformed),self.assertRaises((ValueError,KeyError)):
+                parse_scores(raw(malformed),RUBRICS)
+
+    def test_offline_replay_creates_new_audit_without_touching_source_or_pending(self):
+        from reproduction.replay_saved_judge import replay_saved
+        wrapped=raw('<escape>{"R1":0,"R2":2}</escape>')
+        with patch('reproduction.judge_client.post_raw',return_value=wrapped),patch('reproduction.judge_client.parse_scores',side_effect=ValueError('old parser')):
+            with self.assertRaises(JudgeResponseError):self.client.score('old wrap',RUBRICS)
+        with patch('reproduction.judge_client.post_raw',return_value=raw('not JSON')):
+            with self.assertRaises(JudgeResponseError):self.client.score('bad format',RUBRICS)
+        self.client.begin('unknown-pending','{}')
+        with closing(sqlite3.connect(self.db)) as connection:
+            original=connection.execute('SELECT request_key,status,result FROM requests ORDER BY request_key').fetchall()
+            original_attempts=connection.execute('SELECT * FROM attempts').fetchall()
+        output=Path(self.tmp.name)/'replayed.sqlite'
+        with patch('reproduction.judge_client.post_raw') as api:
+            report=replay_saved(self.db,output)
+            api.assert_not_called()
+        self.assertEqual(report['replayed'],1)
+        self.assertEqual(report['pending_blocked'],1)
+        with closing(sqlite3.connect(self.db)) as connection:
+            self.assertEqual(connection.execute('SELECT request_key,status,result FROM requests ORDER BY request_key').fetchall(),original)
+        with closing(sqlite3.connect(output)) as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM requests WHERE status="ok"').fetchone()[0],1)
+            self.assertEqual(connection.execute('SELECT count(*) FROM requests WHERE status="pending"').fetchone()[0],1)
+            self.assertEqual(connection.execute('SELECT old_status,new_status FROM replay_history').fetchall(),[('terminal_failure','ok')])
+            self.assertEqual(connection.execute('SELECT * FROM attempts').fetchall(),original_attempts)
+        with self.assertRaises(FileExistsError):replay_saved(self.db,output)
 
     def test_pending_request_cannot_be_resampled(self):
         self.client.begin('pending-key','{}')

@@ -41,9 +41,19 @@ def parse_scores(raw, rubrics):
     content=response['choices'][0]['message']['content']
     if not isinstance(content,str):
         raise ValueError('judge message content is not text')
-    content=re.sub(r'^```json\s*','',content.strip())
-    content=re.sub(r'\s*```$','',content)
-    parsed=json.loads(content)
+    content=content.strip()
+    # Deterministic provider wire format observed in the saved integration audit.
+    # Outer Chat JSON decoding has already unescaped its ordinary JSON quotes.
+    # Never replace backslashes or extract a guessed JSON substring.
+    if content.startswith('<escape>'):
+        if not content.endswith('</escape>'):
+            raise ValueError('unterminated provider escape wrapper')
+        content=content[len('<escape>'):-len('</escape>')]
+        parsed=json.loads(content)
+    else:
+        content=re.sub(r'^```json\s*','',content)
+        content=re.sub(r'\s*```$','',content)
+        parsed=json.loads(content)
     if not isinstance(parsed,dict):
         raise ValueError('rubric result must be an object')
     result={}
